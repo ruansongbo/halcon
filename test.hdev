@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.1" halcon_version="12.0">
+<procedure name="main">
+<interface/>
+<body>
+<c>*****************************读取含标定板的图像****************************</c>
+<l>ImageFiles := []</l>
+<l>ImageFiles[0] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-1.png'</l>
+<l>ImageFiles[1] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-2.png'</l>
+<l>ImageFiles[2] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-3.png'</l>
+<l>ImageFiles[3] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-4.png'</l>
+<l>ImageFiles[4] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-5.png'</l>
+<l>ImageFiles[5] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-6.png'</l>
+<l>ImageFiles[6] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-7.png'</l>
+<l>ImageFiles[7] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-8.png'</l>
+<l>ImageFiles[8] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-9.png'</l>
+<l>ImageFiles[9] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-10.png'</l>
+<l>ImageFiles[10] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-11.png'</l>
+<l>ImageFiles[11] := 'C:/Users/bb/Desktop/cal/新建文件夹/calib-3d-coord-12.png'</l>
+<c>********************************设定相机参数*********************************</c>
+<l>TmpCtrl_ReferenceIndex := 0</l>
+<l>TmpCtrl_PlateDescription := 'C:/Users/bb/Desktop/cal/halcon.descr'</l>
+<c>*相机初始参数</c>
+<l>StartParameters := [0.008,0,0,0,0,0,3.125e-006,3.125e-006,384,288,768,576]</l>
+<l>TmpCtrl_FindCalObjParNames := ['gap_tolerance','alpha','skip_find_caltab']</l>
+<l>TmpCtrl_FindCalObjParValues := [1,1,'false']</l>
+<l>dev_close_window()</l>
+<l>read_image (Image, ImageFiles[0])</l>
+<l>get_image_size(Image, Width, Height)</l>
+<l>dev_open_window(0, 0, Width, Height, 'black', WindowHandle)</l>
+<l>dev_set_draw ('margin')</l>
+<l>dev_set_line_width (1)</l>
+<c>*创建标定数据（标定类型，相机数量，标定板数量，标定板模型句柄）</c>
+<l>create_calib_data('calibration_object', 1, 1, CalibHandle)</l>
+<c>*设定相机参数</c>
+<l>set_calib_data_cam_param (CalibHandle, 0, 'area_scan_polynomial', StartParameters)</l>
+<c>*指定标定描述文件</c>
+<l>set_calib_data_calib_object(CalibHandle, 0, TmpCtrl_PlateDescription)</l>
+<c></c>
+<l>for Index := 0 to |ImageFiles|-1 by 1</l>
+<l>    read_image (Image, ImageFiles[Index])</l>
+<l>    find_calib_object (Image, CalibHandle, 0, 0, Index, TmpCtrl_FindCalObjParNames, TmpCtrl_FindCalObjParValues)</l>
+<l>    find_caltab(Image, CaltabRagion,'caltab_30mm.descr', 3, 112, 5)</l>
+<l>    dev_set_color('green')</l>
+<l>    dev_display (CaltabRagion)</l>
+<c>    *参数解释（包含标定板的图像，标定板描述文件，相机初始参数，初始提取轮廓阈值128，轮廓阈值减小步长 10，提取黑点轮廓滤波器参数 0.9，黑圆点最小轮廓长度 15，黑圆点最大直径 100，圆心坐标，预估外参）</c>
+<l>    find_marks_and_pose(Image, CaltabRagion, TmpCtrl_PlateDescription, StartParameters, 128,10, 18, 0.9, 15, 100, RCoord, CCoord, StartPose)</l>
+<c>    *StartPose 为粗略得到的外参（即位姿）</c>
+<l>    dev_set_color('red')</l>
+<l>    disp_cross (WindowHandle, RCoord, CCoord, 6, 0)</l>
+<c>    *将标定数据保存在标定模型中</c>
+<l>    set_calib_data_observ_points(CalibHandle, 0, 0, Index, RCoord, CCoord, 'all', StartPose)</l>
+<l>    stop()</l>
+<c>    </c>
+<l>endfor</l>
+<c></c>
+<c>********************************标定相机**************************************</c>
+<c>*标定相机，注意 calibrate_cameras 与 camera_calibration 的区别</c>
+<l>calibrate_cameras(CalibHandle, Error)</l>
+<c>**取相机内外参数</c>
+<l>get_calib_data(CalibHandle, 'camera', 0, 'params', CamParam)</l>
+<l>get_calib_data (CalibHandle, 'calib_obj_pose', [0,1], 'pose', CameraPose)</l>
+<c>*********************保存相机内参，且该函数只能保存内参**********************</c>
+<l>set_origin_pose (CameraPose, 0.0, 0.0, 0.001, CameraPose)</l>
+<l>write_cam_par (CamParam, 'camparam.dat')</l>
+<c>* Calibration 01: Clear calibration model when done</c>
+<l>clear_calib_data (CalibHandle)</l>
+<c></c>
+<c>***********************************矫正图像径向畸变***************************</c>
+<l>read_image (SnapImage, 'scratch/scratch_calib_01.png')</l>
+<l>get_image_size(SnapImage, Width1, Height1)</l>
+<c>*赋值相机内参（带畸变），标定得到的数据</c>
+<l>CamParIn := [0.012354, -1184.63, 5.53477e-006, 5.5e-006, 244.859, 254.739, 640, 480]</l>
+<l>CarParamVirtualFixed:=CamParIn</l>
+<l>CarParamVirtualFixed[1]:=0</l>
+<c>*转化为无畸变内参,采用 adaptive 模式</c>
+<l>change_radial_distortion_cam_par ('adaptive', CamParIn, 0, CarParamVirtualFixed)</l>
+<c>*生成 map</c>
+<l>gen_radial_distortion_map (Map, CamParIn, CarParamVirtualFixed, 'bilinear')</l>
+<l>*write_image (Map, 'tiff', 0, MapFile)</l>
+<l>map_image(SnapImage, Map, ImageMapped)</l>
+<c>*******************************计算像素距离*********************************</c>
+<l>read_image (DistImage, 'scratch/scratch_calib_01.png')</l>
+<l>get_image_size (DistImage, Width2, Height2)</l>
+<c>*赋值相机内参（带畸变），标定得到的数据</c>
+<l>* CamParIn := [0.012354, -1184.63, 5.53477e-006, 5.5e-006, 244.859, 254.739, 640, 480]</l>
+<l>* CarParamVirtualFixed:=CamParIn</l>
+<l>* CarParamVirtualFixed[1]:=0</l>
+<c>*转化为无畸变内参,采用 adaptive 模式</c>
+<l>* change_radial_distortion_cam_par ('adaptive', CamParIn, 0, CarParamVirtualFixed)</l>
+<c>*生成 map</c>
+<l>* gen_radial_distortion_map (DistMap, CamParIn, CarParamVirtualFixed, 'bilinear')</l>
+<l>* map_image(DistImage, DistMap, ImageMapped)</l>
+<c>*矫正后再测量</c>
+<c>*选取两个像素点</c>
+<l>Image_X1:=100</l>
+<l>Image_Y1:=100</l>
+<l>Distance_XY:=500</l>
+<l>Image_X2:=Image_X1 + Distance_XY</l>
+<l>Image_Y2:=Image_Y1 + Distance_XY</l>
+<c>*考虑标定板厚度的影响</c>
+<l>set_origin_pose( PoseCalib, 0, 0, 0.001, PoseNewOrigin)</l>
+<c>*将像素坐标转化为世界坐标（单位 m）</c>
+<l>image_points_to_world_plane(CamParam,  PoseNewOrigin,  Image_Y1,  Image_X1,  'm',World_X1, World_Y1)</l>
+<l>image_points_to_world_plane(CamParam,  PoseNewOrigin,  Image_Y2  ,Image_X2,  'm',World_X2, World_Y2)</l>
+<c>*计算世界坐标距离</c>
+<l>distance_pp(World_Y1, World_X1, World_Y2, World_X2, DistanceWorld)</l>
+<c>*计算像素坐标</c>
+<l>distance_pp(Image_X1, Image_Y1, Image_X2, Image_Y2, DistanceImage)</l>
+<c>*每毫米世界坐标距=距离对应的像素点个数</c>
+<l>DistanceOneMilimeter:=DistanceImage/DistanceWorld</l>
+<c>*每个像素对应的世界坐标距离</c>
+<l>DistanceOnePixel:=DistanceWorld/DistanceImage</l>
+<c>*调整世界坐标至中心偏移量</c>
+<l>OffSetX:=(Width/2)*DistanceOnePixel</l>
+<l>OffSetY:=(Height/2)*DistanceOnePixel</l>
+<c>*******************************消除采集图像畸变*****************************</c>
+<c>*真实图片测距</c>
+<c>*读取图像，实际过程应该改为采集图像</c>
+<l>read_image (ImagePerspective, 'scratch/scratch_perspective.png')</l>
+<l>map_image(ImagePerspective, Map, ImageMapped1)</l>
+<l>dev_display(ImageMapped1)</l>
+<c>*调整相机外参</c>
+<l>tuple_replace (PoseNewOrigin, 5, PoseCalib[5], PoseCalibRot)</l>
+<c>*设定世界坐标</c>
+<l>set_origin_pose( PoseCalibRot, -OffSetX, -OffSetY, 0, PoseNewOriginFinal)</l>
+<l>*image_to_world_plane(ImagePerspective, ImageWorld, CamParam, PoseNewOriginFinal, Width,Height, DistanceOnePixel, 'bilinear')</l>
+<c>*生成 map，消除径向畸变与视角畸变</c>
+<l>gen_image_to_world_plane_map (Map1, CamParam, PoseNewOriginFinal, Width, Height, Width,Height, DistanceOnePixel, 'bilinear')</l>
+<c>*矫正图像</c>
+<l>map_image (ImagePerspective, Map1, ImageMapped2)</l>
+<c>***************************计算距离***************************</c>
+<l>dev_set_draw ('fill')</l>
+<l>fast_threshold(ImageMapped2, Region, 20,80, 20)</l>
+<l>fill_up(Region, RegionFillUp)</l>
+<l>erosion_rectangle1(RegionFillUp, RegionErosion,20, 20)</l>
+<l>reduce_domain(ImageMapped2, RegionErosion, ImageReduced)</l>
+<l>var_threshold (ImageReduced, Region1, 5,5, 0.2, 5, 'light')</l>
+<l>dilation_circle(Region1, RegionDilation, 3.5)</l>
+<l>connection(RegionDilation, ConnectedRegions)</l>
+<l>select_shape(ConnectedRegions, SelectedRegions, 'area', 'and', 1400,2000)</l>
+<l>skeleton(SelectedRegions, Skeleton)</l>
+<l>gen_contours_skeleton_xld(Skeleton, Contours, 1, 'filter')</l>
+<l>length_xld(Contours, Length)</l>
+<l>Legth:=Length*DistanceOnePixel</l>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>
